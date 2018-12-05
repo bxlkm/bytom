@@ -86,14 +86,14 @@ func Compile(r io.Reader) ([]*Contract, error) {
 		}
 		for _, clause := range contract.Clauses {
 			index := 0
-			condition := make(map[string]string)
+			conditions := make(map[string]string)
 			condValues := make(map[string][]ValueInfo)
 			for _, stmt := range clause.statements {
-				valueInfo := calClauseValues(contract, stmt, condition, condValues, &index)
+				valueInfo := calClauseValues(contract, stmt, conditions, condValues, &index)
 				if valueInfo != nil {
 					clause.Values = append(clause.Values, *valueInfo)
 				} else {
-					clause.Condition = condition
+					clause.Conditions = conditions
 					clause.CondValues = condValues
 				}
 			}

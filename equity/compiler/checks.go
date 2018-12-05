@@ -39,16 +39,16 @@ func checkStatRecursive(stmt statement, contractName string) bool {
 	return false
 }
 
-func calClauseValues(contract *Contract, stmt statement, condition map[string]string, condValues map[string][]ValueInfo, index *int) (valueInfo *ValueInfo) {
+func calClauseValues(contract *Contract, stmt statement, conditions map[string]string, condValues map[string][]ValueInfo, index *int) (valueInfo *ValueInfo) {
 	switch s := stmt.(type) {
 	case *ifStatement:
 		*index++
 		strIndex := fmt.Sprintf("%d", *index)
-		condition["condition_"+strIndex] = s.condition.String()
+		conditions["condition_"+strIndex] = s.condition.String()
 
 		trueValues := []ValueInfo{}
 		for _, trueStmt := range s.body.trueBody {
-			trueValue := calClauseValues(contract, trueStmt, condition, condValues, index)
+			trueValue := calClauseValues(contract, trueStmt, conditions, condValues, index)
 			if trueValue != nil {
 				trueValues = append(trueValues, *trueValue)
 			}
@@ -58,7 +58,7 @@ func calClauseValues(contract *Contract, stmt statement, condition map[string]st
 		if len(s.body.falseBody) != 0 {
 			falseValues := []ValueInfo{}
 			for _, falseStmt := range s.body.falseBody {
-				falseValue := calClauseValues(contract, falseStmt, condition, condValues, index)
+				falseValue := calClauseValues(contract, falseStmt, conditions, condValues, index)
 				if falseValue != nil {
 					falseValues = append(falseValues, *falseValue)
 				}

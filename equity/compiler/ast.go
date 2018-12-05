@@ -76,11 +76,11 @@ type Clause struct {
 
 	// Condition is the map of condition for if-else statements which body contains
 	// the lock or unlock statement in this clause.
-	Condition map[string]string
+	Conditions map[string]string `json:"conditions"`
 
 	// CondValues is the map of values unlocked or relocked in this clause's if-else statements
 	// which body contains the lock or unlock statement.
-	CondValues map[string][]ValueInfo `json:"values"`
+	CondValues map[string][]ValueInfo `json:"cond_values"`
 
 	// Contracts is the list of contracts called by this clause.
 	Contracts []string `json:"contracts,omitempty"`
