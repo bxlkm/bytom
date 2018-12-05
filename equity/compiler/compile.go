@@ -85,22 +85,16 @@ func Compile(r io.Reader) ([]*Contract, error) {
 			return nil, errors.Wrap(err, "compiling contract")
 		}
 		for _, clause := range contract.Clauses {
+			index := 0
+			condition := make(map[string]string)
+			condValues := make(map[string][]ValueInfo)
 			for _, stmt := range clause.statements {
-				switch s := stmt.(type) {
-				case *lockStatement:
-					valueInfo := ValueInfo{
-						Amount:  s.lockedAmount.String(),
-						Asset:   s.lockedAsset.String(),
-						Program: s.program.String(),
-					}
-
-					clause.Values = append(clause.Values, valueInfo)
-				case *unlockStatement:
-					valueInfo := ValueInfo{
-						Amount: contract.Value.Amount,
-						Asset:  contract.Value.Asset,
-					}
-					clause.Values = append(clause.Values, valueInfo)
+				valueInfo := calClauseValues(contract, stmt, condition, condValues, &index)
+				if valueInfo != nil {
+					clause.Values = append(clause.Values, *valueInfo)
+				} else {
+					clause.Condition = condition
+					clause.CondValues = condValues
 				}
 			}
 		}
@@ -122,7 +116,7 @@ func Instantiate(body []byte, params []*Param, recursive bool, args []ContractAr
 			if arg.I == nil {
 				return nil, fmt.Errorf("type mismatch in arg %d (want integer)", i)
 			}
-		case assetType, hashType, progType, pubkeyType, sigType, strType:
+		case assetType, hashType, progType, pubkeyType, sigType, signType, strType:
 			if arg.S == nil {
 				return nil, fmt.Errorf("type mismatch in arg %d (want string)", i)
 			}
@@ -319,21 +313,8 @@ func compileClause(b *builder, contractStk stack, contract *Contract, env *envir
 
 	// a count of the number of times each variable is referenced
 	counts := make(map[string]int)
-	for _, s := range clause.statements {
-		if stmt, ok := s.(*defineStatement); ok && stmt.expr == nil {
-			continue
-		}
-
-		s.countVarRefs(counts)
-		if stmt, ok := s.(*ifStatement); ok {
-			for _, trueStmt := range stmt.body.trueBody {
-				trueStmt.countVarRefs(counts)
-			}
-
-			for _, falseStmt := range stmt.body.falseBody {
-				falseStmt.countVarRefs(counts)
-			}
-		}
+	for _, stat := range clause.statements {
+		counts = countsVarRef(stat, counts)
 	}
 
 	for _, stat := range clause.statements {
@@ -361,6 +342,9 @@ func compileStatement(b *builder, stk stack, contract *Contract, env *environ, c
 		// sequence add 1 when the statement is ifStatement
 		*sequence++
 		strSequence := fmt.Sprintf("%d", *sequence)
+
+		// compile the contract valueAmount and valueAsset for expression
+		stk, counts = compileContractValue(b, stmt.condition, contract.Value, stk, counts)
 
 		// compile condition expression
 		stk, err = compileExpr(b, stk, contract, clause, env, counts, stmt.condition)
@@ -441,6 +425,9 @@ func compileStatement(b *builder, stk stack, contract *Contract, env *environ, c
 		}
 
 		if stmt.expr != nil {
+			// compile the contract valueAmount and valueAsset for expression
+			stk, counts = compileContractValue(b, stmt.expr, contract.Value, stk, counts)
+
 			// variable
 			stk, err = compileExpr(b, stk, contract, clause, env, counts, stmt.expr)
 			if err != nil {
@@ -487,6 +474,9 @@ func compileStatement(b *builder, stk stack, contract *Contract, env *environ, c
 			stk = b.addDrop(stk)
 		}
 
+		// compile the contract valueAmount and valueAsset for expression
+		stk, counts = compileContractValue(b, stmt.expr, contract.Value, stk, counts)
+
 		// variable
 		stk, err = compileExpr(b, stk, contract, clause, env, counts, stmt.expr)
 		if err != nil {
@@ -502,6 +492,9 @@ func compileStatement(b *builder, stk stack, contract *Contract, env *environ, c
 		stk.str = stmt.variable.Name
 
 	case *verifyStatement:
+		// compile the contract valueAmount and valueAsset for expression
+		stk, counts = compileContractValue(b, stmt.expr, contract.Value, stk, counts)
+
 		stk, err = compileExpr(b, stk, contract, clause, env, counts, stmt.expr)
 		if err != nil {
 			return stk, errors.Wrapf(err, "in verify statement in clause \"%s\"", clause.Name)
@@ -850,6 +843,22 @@ func compileArg(b *builder, stk stack, contract *Contract, clause *Clause, env *
 	var err error
 	stk, err = compileExpr(b, stk, contract, clause, env, counts, expr)
 	return stk, 1, err
+}
+
+func compileContractValue(b *builder, expr expression, contractValue ValueInfo, stk stack, counts map[string]int) (stack, map[string]int) {
+	valueCounts := make(map[string]int)
+	expr.countVarRefs(valueCounts)
+	if valueCounts[contractValue.Amount] > 0 {
+		counts[contractValue.Amount] = valueCounts[contractValue.Amount]
+		stk = b.addAmount(stk, contractValue.Amount)
+	}
+
+	if valueCounts[contractValue.Asset] > 0 {
+		counts[contractValue.Asset] = valueCounts[contractValue.Asset]
+		stk = b.addAsset(stk, contractValue.Asset)
+	}
+
+	return stk, counts
 }
 
 func compileRef(b *builder, stk stack, counts map[string]int, ref varRef) (stack, error) {

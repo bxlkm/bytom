@@ -39,6 +39,50 @@ func checkStatRecursive(stmt statement, contractName string) bool {
 	return false
 }
 
+func calClauseValues(contract *Contract, stmt statement, condition map[string]string, condValues map[string][]ValueInfo, index *int) (valueInfo *ValueInfo) {
+	switch s := stmt.(type) {
+	case *ifStatement:
+		*index++
+		strIndex := fmt.Sprintf("%d", *index)
+		condition["condition_"+strIndex] = s.condition.String()
+
+		trueValues := []ValueInfo{}
+		for _, trueStmt := range s.body.trueBody {
+			trueValue := calClauseValues(contract, trueStmt, condition, condValues, index)
+			if trueValue != nil {
+				trueValues = append(trueValues, *trueValue)
+			}
+		}
+		condValues["truebody_"+strIndex] = trueValues
+
+		if len(s.body.falseBody) != 0 {
+			falseValues := []ValueInfo{}
+			for _, falseStmt := range s.body.falseBody {
+				falseValue := calClauseValues(contract, falseStmt, condition, condValues, index)
+				if falseValue != nil {
+					falseValues = append(falseValues, *falseValue)
+				}
+			}
+			condValues["falsebody_"+strIndex] = falseValues
+		}
+
+	case *lockStatement:
+		valueInfo = &ValueInfo{
+			Amount:  s.lockedAmount.String(),
+			Asset:   s.lockedAsset.String(),
+			Program: s.program.String(),
+		}
+
+	case *unlockStatement:
+		valueInfo = &ValueInfo{
+			Amount: contract.Value.Amount,
+			Asset:  contract.Value.Asset,
+		}
+	}
+
+	return valueInfo
+}
+
 func prohibitSigParams(contract *Contract) error {
 	for _, p := range contract.Params {
 		if p.Type == sigType {
@@ -158,6 +202,29 @@ func referencedBuiltin(expr expression) *builtin {
 	return nil
 }
 
+func countsVarRef(stat statement, counts map[string]int) map[string]int {
+	if stmt, ok := stat.(*defineStatement); ok && stmt.expr == nil {
+		return counts
+	}
+
+	if _, ok := stat.(*unlockStatement); ok {
+		return counts
+	}
+
+	stat.countVarRefs(counts)
+	if stmt, ok := stat.(*ifStatement); ok {
+		for _, trueStmt := range stmt.body.trueBody {
+			counts = countsVarRef(trueStmt, counts)
+		}
+
+		for _, falseStmt := range stmt.body.falseBody {
+			counts = countsVarRef(falseStmt, counts)
+		}
+	}
+
+	return counts
+}
+
 func assignIndexes(clause *Clause) error {
 	var nextIndex int64
 	for i, stmt := range clause.statements {
@@ -224,13 +291,13 @@ func typeCheckStatement(stat statement, contractValue ValueInfo, clauseName stri
 		}
 
 	case *defineStatement:
-		if stmt.expr != nil && stmt.expr.typ(env) != stmt.variable.Type && !isHashSubtype(stmt.expr.typ(env)) {
+		if stmt.expr != nil && stmt.expr.typ(env) != stmt.variable.Type && !(stmt.variable.Type == hashType && isHashSubtype(stmt.expr.typ(env))) {
 			return fmt.Errorf("expression in define statement in clause \"%s\" has type \"%s\", must be \"%s\"",
 				clauseName, stmt.expr.typ(env), stmt.variable.Type)
 		}
 
 	case *assignStatement:
-		if stmt.expr.typ(env) != stmt.variable.Type && !isHashSubtype(stmt.expr.typ(env)) {
+		if stmt.expr.typ(env) != stmt.variable.Type && !(stmt.variable.Type == hashType && isHashSubtype(stmt.expr.typ(env))) {
 			return fmt.Errorf("expression in assign statement in clause \"%s\" has type \"%s\", must be \"%s\"",
 				clauseName, stmt.expr.typ(env), stmt.variable.Type)
 		}
