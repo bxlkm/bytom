@@ -8,13 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bytom/crypto/sm3"
-
 	"github.com/tendermint/tmlibs/db"
 
 	"github.com/bytom/account"
 	"github.com/bytom/blockchain/signers"
 	"github.com/bytom/crypto/sm2/chainkd"
+	"github.com/bytom/crypto/sm3"
 	"github.com/bytom/errors"
 	"github.com/bytom/protocol/bc"
 	"github.com/bytom/protocol/bc/types"
