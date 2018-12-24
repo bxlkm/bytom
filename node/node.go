@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/prometheus/util/flock"
 	log "github.com/sirupsen/logrus"
+	"github.com/tendermint/go-crypto"
 	cmn "github.com/tendermint/tmlibs/common"
 	dbm "github.com/tendermint/tmlibs/db"
 	browser "github.com/toqueteos/webbrowser"
@@ -30,6 +31,8 @@ import (
 	"github.com/bytom/mining/tensority"
 	"github.com/bytom/net/websocket"
 	"github.com/bytom/netsync"
+	"github.com/bytom/p2p"
+	"github.com/bytom/p2p/discover"
 	"github.com/bytom/protocol"
 	"github.com/bytom/protocol/bc"
 	w "github.com/bytom/wallet"
@@ -44,11 +47,8 @@ type Node struct {
 	cmn.BaseService
 
 	// config
-	config *cfg.Config
-
-	syncManager *netsync.SyncManager
-
-	//bcReactor    *bc.BlockchainReactor
+	config          *cfg.Config
+	syncManager     *netsync.SyncManager
 	wallet          *w.Wallet
 	accessTokens    *accesstoken.CredentialStore
 	notificationMgr *websocket.WSNotificationManager
@@ -58,8 +58,7 @@ type Node struct {
 	cpuMiner        *cpuminer.CPUMiner
 	miningPool      *miningpool.MiningPool
 	miningEnable    bool
-
-	newBlockCh chan *bc.Hash
+	newBlockCh      chan *bc.Hash
 }
 
 func NewNode(config *cfg.Config) *Node {
@@ -119,9 +118,29 @@ func NewNode(config *cfg.Config) *Node {
 			wallet.RescanBlocks()
 		}
 	}
-	newBlockCh := make(chan *bc.Hash, maxNewBlockChSize)
 
-	syncManager, _ := netsync.NewSyncManager(config, chain, txPool, newBlockCh)
+	blacklistDB := dbm.NewDB("trusthistory", config.DBBackend, config.DBDir())
+	privKey := crypto.GenPrivKeyEd25519()
+	// Create & add listener
+	var l p2p.Listener
+	var listenAddr string
+
+	if !config.VaultMode {
+		l, listenAddr = p2p.GetListener(config.P2P)
+	}
+
+	discover, err := discover.NewDiscover(config, &privKey, l.ExternalAddress().Port)
+	if err != nil {
+		cmn.Exit(cmn.Fmt("Failed to create p2p discover: %v", err))
+	}
+
+	sw, err := p2p.NewSwitch(config, blacklistDB, privKey, l, listenAddr, discover)
+	if err != nil {
+		cmn.Exit(cmn.Fmt("Failed to create p2p switch: %v", err))
+	}
+
+	newBlockCh := make(chan *bc.Hash, maxNewBlockChSize)
+	syncManager, _ := netsync.NewSyncManager(config, sw, chain, txPool, newBlockCh)
 
 	notificationMgr := websocket.NewWsNotificationManager(config.Websocket.MaxNumWebsockets, config.Websocket.MaxNumConcurrentReqs, chain)
 
@@ -252,8 +271,11 @@ func (n *Node) OnStart() error {
 		}
 	}
 	if !n.config.VaultMode {
-		n.syncManager.Start()
+		if err := n.syncManager.Start(); err != nil {
+			return err
+		}
 	}
+
 	n.initAndstartApiServer()
 	n.notificationMgr.Start()
 	if !n.config.Web.Closed {
