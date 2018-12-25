@@ -102,12 +102,12 @@ type ValueInfo struct {
 	// the contract value instead, this is empty.
 	Amount string `json:"amount,omitempty"`
 
-	// ContractCalls is the list of arguments for program which is a contract.
-	ContractCalls []CallArgs `json:"contract_calls,omitempty"`
-
 	// AmountParams is the list of parameters for Amount expression.
 	// If the value of amount is a variable, this is empty.
 	AmountParams []*Param `json:"amount_params,omitempty"`
+
+	// ContractCalls is the list of arguments for program which is a contract.
+	ContractCalls []CallArgs `json:"contract_calls,omitempty"`
 }
 
 // HashCall describes a call to a hash function.
@@ -126,7 +126,7 @@ type HashCall struct {
 // contains the lock or unlock statement.
 type CondValueInfo struct {
 	// condition is the condition expression for if-else statements.
-	Condition ConditionInfo `json:"condition"`
+	Condition ExpressionInfo `json:"condition"`
 
 	// TrueBodyValues is the list of values unlocked or relocked in the trueBody
 	// for if-else statements.
@@ -137,16 +137,16 @@ type CondValueInfo struct {
 	FalseBodyValues []ValueInfo `json:"false_body"`
 }
 
-// ConditionInfo describes a condition expression.
-type ConditionInfo struct {
-	// Source is the string format of condition expression.
+// ExpressionInfo describes a operational expression.
+type ExpressionInfo struct {
+	// Source is the string format of operational expression.
 	Source string `json:"source"`
 
-	// Params is the list of parameters for condition expression.
+	// Params is the list of parameters for operational expression.
 	Params []*Param `json:"params,omitempty"`
 }
 
-// CallArgs describes a argument expression for function call.
+// CallArgs describes a argument expression for function or contract call.
 type CallArgs struct {
 	// Source is the string format of argument expression.
 	Source string `json:"source"`
