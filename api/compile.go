@@ -50,6 +50,7 @@ func compileEquity(req compileReq) (*compileResp, error) {
 		Clauses: contract.Clauses,
 		Opcodes: contract.Opcodes,
 	}
+	resp.Value.Name = contract.Value.Amount + " of " + contract.Value.Asset
 
 	if req.Args != nil {
 		resp.Program, err = compiler.Instantiate(contract.Body, contract.Params, contract.Recursive, req.Args)
