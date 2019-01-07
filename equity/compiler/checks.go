@@ -107,18 +107,24 @@ func calClauseValues(contract *Contract, env *environ, stmt statement, condValue
 			if bi := referencedBuiltin(res.fn); bi == nil {
 				if v, ok := res.fn.(varRef); ok {
 					if entry := env.lookup(string(v)); entry != nil && entry.t == contractType {
+						valueInfo.ProgramInfo = &ProgramInfo{Name: string(v)}
 						programExpr = fmt.Sprintf("%s(", string(v))
 						for i := 0; i < len(res.args); i++ {
 							argExpr := res.args[i].String()
 							argCounts := make(map[string]int)
 							res.args[i].countVarRefs(argCounts)
+							programArg := ProgramArg{}
+
 							if _, ok := argCounts[argExpr]; !ok {
 								params := getParams(env, argCounts, &argExpr, tempVariables)
-								valueInfo.ContractCalls = append(valueInfo.ContractCalls, CallArgs{Source: argExpr, Position: i, Params: params})
+								programArg = ProgramArg{Source: argExpr, Params: params}
 							} else if _, ok := tempVariables[argExpr]; ok {
-								valueInfo.ContractCalls = append(valueInfo.ContractCalls, CallArgs{Source: tempVariables[argExpr].Source, Position: i, Params: tempVariables[argExpr].Params})
+								programArg = ProgramArg{Source: tempVariables[argExpr].Source, Params: tempVariables[argExpr].Params}
 								argExpr = tempVariables[argExpr].Source
+							} else if entry := env.lookup(argExpr); entry != nil {
+								programArg = ProgramArg{Name: argExpr, Type: entry.t}
 							}
+							valueInfo.ProgramInfo.Params = append(valueInfo.ProgramInfo.Params, &programArg)
 
 							if i == len(res.args)-1 {
 								programExpr = fmt.Sprintf("%s%s)", programExpr, argExpr)

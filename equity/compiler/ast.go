@@ -63,9 +63,8 @@ type Clause struct {
 
 	statements []statement
 
-	// BlockHeight is the list of expressions passed to greater()/less() in this
-	// clause.
-	BlockHeight []string `json:"blockheight,omitempty"`
+	// BlockHeight is the list of expressions passed to above()/below() in this clause.
+	BlockHeight []string `json:"block_height,omitempty"`
 
 	// HashCalls is the list of hash functions and their arguments used
 	// in this clause.
@@ -87,11 +86,6 @@ type ValueInfo struct {
 	// Name is the clause's name for this value.
 	Name string `json:"name"`
 
-	// Program is the program expression used to the lock the value, if
-	// the value is locked with "lock." If it's unlocked with "unlock"
-	// instead, this is empty.
-	Program string `json:"program,omitempty"`
-
 	// Asset is the expression describing the asset type the value must
 	// have, as it appears in a clause's "requires" section. If this is
 	// the contract value instead, this is empty.
@@ -106,8 +100,14 @@ type ValueInfo struct {
 	// If the value of amount is a variable, this is empty.
 	AmountParams []*Param `json:"amount_params,omitempty"`
 
-	// ContractCalls is the list of arguments for program which is a contract.
-	ContractCalls []CallArgs `json:"contract_calls,omitempty"`
+	// Program is the program expression used to the lock the value, if
+	// the value is locked with "lock." If it's unlocked with "unlock"
+	// instead, this is empty.
+	Program string `json:"program,omitempty"`
+
+	// ProgramInfo is a struct for program when it is a contract call.
+	// If the program is a variable, this is empty.
+	ProgramInfo *ProgramInfo `json:"program_info,omitempty"`
 }
 
 // HashCall describes a call to a hash function.
@@ -146,13 +146,25 @@ type ExpressionInfo struct {
 	Params []*Param `json:"params,omitempty"`
 }
 
-// CallArgs describes a argument expression for function or contract call.
-type CallArgs struct {
-	// Source is the string format of argument expression.
-	Source string `json:"source"`
+// ProgramInfo describes a program for contract call.
+type ProgramInfo struct {
+	// Name is the contract name of program.
+	Name string `json:"name"`
 
-	// Position is the position of argument expression.
-	Position int `json:"position"`
+	// Params is the list of contract parameters.
+	Params []*ProgramArg `json:"params"`
+}
+
+// ProgramArg describes a parameter for contract call.
+type ProgramArg struct {
+	// Name is the parameter name.
+	Name string `json:"name,omitempty"`
+
+	// Type is the declared parameter type.
+	Type typeDesc `json:"type,omitempty"`
+
+	// Source is the string format of argument expression.
+	Source string `json:"source,omitempty"`
 
 	// Params is the list of parameters for argument expression.
 	Params []*Param `json:"params,omitempty"`
